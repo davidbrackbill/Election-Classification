@@ -1,4 +1,4 @@
-# Election-Classification
+# Election Classification
 
 ## Abstract
 Predicting 2016 general election results by county using the following classification techniques: 
