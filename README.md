@@ -1,13 +1,13 @@
 # Election-Classification
 
 ## Abstract
-Predicting 2016 general election results by county using classification techniques: 
+Predicting 2016 general election results by county using the following classification techniques: 
 * Generalized linear model
 * Quadratic discriminant analysis
 * Decision trees
 * Random forests
 
-Additional inference coming from use of Principal Component Analysis and consideration of classification error causes.
+Additional inference coming from use of Principal Component Analysis and consideration of classification error sources.
 
 ## Report
 
