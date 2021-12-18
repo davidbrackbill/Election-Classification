@@ -1,0 +1,689 @@
+---
+title: "131 Final Project S21"
+subtitle: "Classification of the 2016 general election"
+author: "David Brackbill, Simranjit Kaur, Joanna Kim, Laila Voss"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    extra_dependencies:
+    - amsmath
+    - xcolor
+    - soul
+    - amsthm
+  html_document:
+    df_print: paged
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, 
+                      message = F,
+                      warning = F,
+                      include = F,
+                      fig.align = 'center',
+                      fig.height = 4, 
+                      fig.width = 4)
+
+# libraries here
+library(pander)
+library(tidyverse)
+library(ggmap)
+library(ggthemes)
+library(gridExtra)
+library(ggridges)
+library(fmsb)
+library(magrittr)
+library(hrbrthemes)
+library(modelr)
+library(ROCR)
+library(tree)
+library(maptree)
+library(ISLR)
+library(rpart)
+library(randomForest)
+library(gbm)
+```
+
+```{r Info}
+##  Info
+# using This_Format for things that need to be saved and called later.
+
+#  ToC of code chunks and saved objects
+## Import
+
+## Simmy
+### loading_plot
+
+## Joanna
+### GLM_Coefficients
+### GLM_Errors
+### QDA_Errors
+
+## Laila
+
+## David
+### Vanilla_Test_Errors (image will do)
+### Seed_Var
+### Avg_Seed_Error
+### Gini_UnPrune_Errors
+### Gini_Prune_Errors
+```
+
+```{r Import}
+# Import merged_data csv straight from Interim Report
+# CHANGE BASED ON COMPUTER PATH
+merged_data <- read.csv('C:/Users/David/Desktop/Pstat 131/131 Project/data/merged_data.csv')
+
+winner_merged_data <- merged_data %>%
+  group_by(fips) %>%
+  top_n(1, pct) %>%
+  rename(winner = candidate) %>%
+  mutate(winner = factor(winner)) %>%
+  ungroup %>%
+  select(-c(fips, votes, pct, state, county))
+```
+
+```{r Simmy PCA}
+### Preliminary Steps ###
+merged_data2 = winner_merged_data
+
+#Taking out rows that state winner's are not Trump and Clinton
+merged_data2 = merged_data2[merged_data2$winner != 'Evan McMullin' & merged_data2$winner != 'Gary Johnson',]
+
+### PC Computation ###
+
+# extract features and center and scale
+x_mx <- merged_data2 %>% 
+  select(-c('winner')) %>% 
+  scale(center = T, scale = T)
+
+# compute SVD
+x_svd <- svd(x_mx)
+
+# get loadings
+v_svd <- x_svd$v
+
+# compute PCs
+z_mx <- x_mx %*% x_svd$v
+
+# pca scatterplot
+z_mx[, 1:2] %>%
+  as.data.frame() %>%
+  rename(PC1 = V1, PC2 = V2) %>%
+  ggplot(aes(x = PC1, y = PC2)) +
+  geom_point(aes(color =  merged_data2$winner), alpha = 0.5) +
+  theme_bw()+facet_wrap(merged_data2$winner~.)
+
+
+### Ridge Plot ###
+
+#reassign data 
+merged_data1 = winner_merged_data
+
+# # center and scale data
+# merged_data1 <- subset(merged_data1, select = -c(winner))
+# merged_data_std <- merged_data1 %>% scale() %>% as.data.frame()
+# merged_data_std <- cbind(merged_data_std, merged_data1$winner)
+# 
+# merged_data_std
+# merged_data1
+# merged_data1$winner
+# 
+# # ridge plot
+# merged_data_std %>%
+#   gather(key = 'variable', value = 'value', 1:12) %>%
+#   ggplot(aes(y = variable, x = value, fill = variable)) +
+#   geom_density_ridges(bandwidth = 0.2) +
+#   theme_minimal() +
+#   xlim(c(-3, 3)) +
+#   labs(y = '') + facet_wrap(merged_data1$winner)
+
+### Variance Plot ###
+
+# compute PC variances
+pc_vars <- x_svd$d^2/(nrow(x_mx) - 1)
+
+# scree and cumulative variance plots
+tibble(PC = 1:min(dim(x_mx)),
+       Proportion = pc_vars/sum(pc_vars),
+       Cumulative = cumsum(Proportion)) %>%
+  gather(key = 'measure', value = 'Variance Explained', 2:3) %>%
+  ggplot(aes(x = PC, y = `Variance Explained`)) +
+  geom_point() +
+  geom_path() +
+  facet_wrap(~ measure) +
+  theme_bw() + theme(axis.text.x = element_text(size = 4))+
+  scale_x_continuous(breaks = 1:28, labels = as.character(1:28))
+
+### Loading Plot ###
+
+#create loading plot 
+loading_plot <- v_svd[, 1:4] %>%
+  as.data.frame() %>%
+  rename(PC1 = V1, PC2 = V2, PC3 = V3, PC4 = V4) %>%
+  mutate(variable = colnames(x_mx)) %>%
+  gather(key = 'PC', value = 'Loading', 1:4) %>%
+  arrange(variable) %>%
+  ggplot(aes(x = variable, y = Loading)) +
+  geom_point(aes(color = PC)) +
+  theme_bw() +
+  geom_hline(yintercept = 0, color = 'black') +
+  geom_path(aes(group = PC, color = PC)) +
+  theme(axis.text.x = element_text(angle = 90), axis.text.y = element_text(size = 5)) +
+  labs(x = '')
+loading_plot+coord_flip()+facet_wrap(PC~.)
+```
+
+```{r Joanna}
+### GLM
+
+#testing superfluous predictors
+testfitglm <- glm(winner ~ ., family = 'binomial', data = winner_merged_data)
+step.model <- MASS::stepAIC(testfitglm, direction = "both", trace = FALSE)
+summary(step.model) 
+
+set.seed(11) 
+#Partition into training and test sets
+winner_part = winner_merged_data %>% 
+  resample_partition(p = c('train' = 0.8, 'test' = 0.2)) 
+
+fit_glm <- glm(winner ~ White + Citizen + Professional + 
+              Service + Production + Drive + Carpool + 
+              Employed + PrivateWork + Unemployment, 
+            family = "binomial", data = winner_part$train)
+
+
+GLM_Coefficients <- summary(fit_glm) %>% coefficients()
+
+#estimated probabilities
+p_hat_glm = predict(fit_glm, winner_part$test, type = 'response')
+
+#bayes classifier 
+y_hat_glm = factor(p_hat_glm > 0.5, labels = c('Donald Trump','Hillary Clinton'))
+#clinton 1 trump 0
+
+#errors
+winner_part_test = as.data.frame(winner_part$test)
+error <- table(y=winner_part_test$winner, y_hat_glm)
+error/rowSums(error)
+
+
+### ROC Curve for GLM
+
+#store training labels for use in constructing ROC
+winner_part_train = as.data.frame(winner_part$train)
+
+#compute predictions and performance metrics
+preds_glm = predict(fit_glm, winner_part$train, type = 'response')
+prediction_glm = prediction(predictions = preds_glm,
+                            labels = winner_part_train$winner)
+perf_glm = performance(prediction.obj = prediction_glm, 'tpr','fpr')
+
+#convert tpr and fpr to dataframe and calculate youden statistic
+rates_glm = tibble(fpr = slot(perf_glm, 'x.values')[[1]],
+                   tpr = slot(perf_glm, 'y.values')[[1]],
+                   thresh = slot(perf_glm, 'alpha.values')[[1]]) %>%
+  mutate(youden = tpr-fpr)
+optimal_thresh = rates_glm %>% slice_max(youden)
+
+#plot
+rates_glm %>%
+  ggplot(aes(x=fpr, y = tpr)) +
+  geom_line() +
+  geom_point(aes(x=optimal_thresh$fpr, y = optimal_thresh$tpr), color = 'red') +
+  theme_bw()
+
+
+### Error rates w/ Youden's
+
+# convert to classes using optimal probability threshold
+y_hat_glm2 = factor(p_hat_glm > optimal_thresh$thresh, labels = c('Donald Trump','Hillary Clinton'))
+
+#cross tabulate with true labels
+error2 = table(winner_part_test$winner, y_hat_glm2)
+GLM_Errors <- error2/rowSums(error2)
+
+#predictive accuracy
+1-mean(winner_part_test$winner != y_hat_glm2) 
+#90.89%
+mean(winner_part_test$winner != y_hat_glm2) 
+#9.1%
+
+
+### QDA
+# Fit 
+qda_fit = MASS::qda(winner ~ White +Citizen + Professional + Service + Production + Drive  + Carpool  + Employed  + PrivateWork +  Unemployment, method = 'mle', data = winner_part$train)
+
+qda_preds = predict(qda_fit, winner_part$test)
+
+errors_qda = table(class = winner_part_test$winner,
+                   pred = qda_preds$class)
+
+errors_qda/rowSums(errors_qda)
+
+
+### ROC Curve for QDA
+prediction_qda = prediction(predictions = qda_preds$posterior[,2],
+                            labels = winner_part_test$winner)
+perf_qda = performance(prediction.obj = prediction_qda, 'tpr','fpr')
+
+#convert tpr and fpr to data frame and calculate youden statistic
+rates_qda = tibble(fpr = slot(perf_qda, 'x.values'),
+                   tpr = slot(perf_qda, 'y.values'),
+                   thresh = slot(perf_qda, 'alpha.values')) %>%
+  unnest(everything()) %>%
+  mutate(youden = tpr-fpr)
+
+optimal_thresh2 = rates_qda %>%
+  slice_max(youden)
+
+rates_qda %>%
+  ggplot(aes(x=fpr,y=tpr))+
+  geom_line() +
+  geom_point(aes(x=optimal_thresh2$fpr, y = optimal_thresh2$tpr), color = 'red') +
+  theme_bw()
+
+
+### Error rates w/ Youden's
+
+y_hat_qda = factor(qda_preds$posterior[,2] > optimal_thresh2$thresh, labels = c('Donald Trump','Hillary Clinton'))
+errors_qda2 = table(winner_part_test$winner, y_hat_qda)
+QDA_Errors <- errors_qda2/rowSums(errors_qda2)
+
+1-mean(winner_part_test$winner != y_hat_qda) 
+#86.18%
+mean(winner_part_test$winner != y_hat_qda) 
+#13.82%
+```
+
+```{r Laila}
+# hold out 20% of data as a test set
+set.seed(12521)
+winner_part <- resample_partition(winner_merged_data, c(test = 0.2, train = 0.8))
+train <- as_tibble(winner_part$train)
+test <- as_tibble(winner_part$test)
+
+# grow a small regression tree
+# NOTE: split = 'deviance' uses RSS for regression
+nmin <- 60
+tree_opts <- tree.control(nobs = nrow(train), 
+                          minsize = nmin, 
+                          mindev = exp(-6))
+t_small <- tree(winner ~ ., data = train,
+                control = tree_opts, split = 'deviance') 
+
+#draw.tree(t_small, cex = 0.75, size = 2.5, digits = 2)
+
+nmin <- 2
+tree_opts <- tree.control(nobs = nrow(train), 
+                          minsize = nmin,
+                          mindev = exp(-8))
+t_0 <- tree(winner ~ ., data = train,
+                control = tree_opts, split = 'deviance') 
+
+nfolds <- 8
+cv_out <- cv.tree(t_0, K = nfolds)
+
+# convert to tibble
+cv_df <- tibble(alpha = cv_out$k,
+                impurity = cv_out$dev,
+                size = cv_out$size)
+
+# choose optimal alpha
+best_alpha <- slice_min(cv_df, impurity) %>%
+  slice_min(size)
+
+# plot impurity against tuning parameter
+plot_impurity <- cv_df %>%
+  ggplot(aes(x = impurity, y = alpha)) +
+  geom_point() +
+  geom_point(data = best_alpha,
+             shape = 16, color = 'red',
+             size = 2) +
+  xlab("Tree impurity") +
+  ylab("Tuning parameter") +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_stata() +
+  scale_fill_stata()
+
+# select final tree
+t_opt <- prune.tree(t_0, k = best_alpha$alpha)
+#summary(t_opt)
+
+# plot
+#draw.tree(t_opt, cex = 0.7, size = 2.5, digits = 2)
+
+preds_train_topt <- predict(t_opt, winner_part$train, type = 'class')
+classes_train <- as.data.frame(winner_part$train) %>% pull(winner)
+training_errors <- table(class = classes_train, pred = preds_train_topt)
+training_errors_table <- training_errors/rowSums(training_errors)
+
+fit_rf <- randomForest(winner ~ ., ntree = 100, mtry = 6, data = winner_merged_data)
+
+p <- ncol(winner_merged_data) - 1
+fit_bag <- randomForest(winner ~ ., ntree = 500, mtry = p, data = winner_merged_data)
+
+fit_bag$importance %>% head()
+
+variable_importance_plot <- fit_bag$importance %>% 
+  as_tibble() %>%
+  mutate(var = factor(rownames(fit_bag$importance)),
+         total_sd = fit_bag$importanceSD[ , 3]) %>%
+  rename(Total = MeanDecreaseGini) %>%
+  ggplot(aes(y = fct_reorder(var, Total), x = Total)) +
+  geom_point() +
+  #geom_errorbarh(aes(xmin = Total - 2*total_sd, xmax = Total + 2*total_sd))
+  theme_bw() +
+  labs(x = 'Mean decrease in tree misclassification rate', 
+       y = '',
+       title = 'Variable importance in random forest model')
+
+```
+
+```{r David}
+### Gini Loss Formula ###
+
+# hold out 20% of data as a test set
+set.seed(12521)
+winner_part <- resample_partition(winner_merged_data, c(test = 0.2, train = 0.8))
+train <- as_tibble(winner_part$train)
+test <- as_tibble(winner_part$test)
+
+# grow a large tree
+tree_opts <- rpart.control(minbucket = 2)
+t_opt <- rpart(winner~., data = train,
+             control = tree_opts, 
+             parms = list(split = 'gini')) 
+
+# Get best complexity parameter, prune
+min_cp <-  t_opt$cptable[which.min(t_opt$cptable[,"xerror"]),"CP"]
+t_prune <- prune(t_opt, cp = min_cp)
+
+
+# Errors using Gini loss formula, unpruned
+noquote('Unpruned Training Errors:')
+preds_train_topt <- predict(t_opt, train, type = 'class')
+
+classes_train <- as.data.frame(train) %>% pull(winner)
+training_errors <- table(class = classes_train, pred = preds_train_topt)
+training_errors/rowSums(training_errors)
+
+noquote('')
+
+noquote('Unpruned Testing Errors:')
+preds_test_topt <- predict(t_opt, test, type = 'class')
+
+classes_test <- as.data.frame(test) %>% pull(winner)
+test_errors <- table(class = classes_test, pred = preds_test_topt)
+vanilla_test_errors <- test_errors /rowSums(test_errors)
+vanilla_test_errors
+
+Gini_UnPrune_Errors <- vanilla_test_errors 
+
+noquote('')
+
+# Errors using Gini loss formula, pruned
+noquote('Pruned Training Errors:')
+preds_train_topt <- predict(t_prune, train, type = 'class')
+
+training_errors <- table(class = classes_train, pred = preds_train_topt)
+training_errors/rowSums(training_errors)
+
+noquote('')
+
+noquote('Pruned Testing Errors:')
+preds_test_topt <- predict(t_prune, test, type = 'class')
+
+test_errors <- table(class = classes_test, pred = preds_test_topt)
+vanilla_test_errors <- test_errors /rowSums(test_errors)
+
+Gini_Prune_Errors <- vanilla_test_errors 
+
+### Seed effect ###
+
+S <- 30
+Seed_Errors <- rep(NULL, S)
+Seed_Variables <- rep(NULL, S)
+
+for(i in 1:S){
+  
+  set.seed(i)
+  # hold out 20% of data as a test set
+  winner_part <- resample_partition(winner_merged_data, c(test = 0.2, train = 0.8))
+  train <- as_tibble(winner_part$train)
+  test <- as_tibble(winner_part$test)
+  
+  # grow a large tree to prune
+  nmin <- 2
+  tree_opts <- tree.control(nobs = nrow(train), 
+                            minsize = nmin,
+                            mindev = exp(-8))
+  t_0 <- tree(winner ~ ., data = train,
+                  control = tree_opts, split = 'deviance') 
+  
+  # cost-complexity pruning
+  nfolds <- 8
+  cv_out <- cv.tree(t_0, K = nfolds)
+  
+  # convert to tibble
+  cv_df <- tibble(alpha = cv_out$k,
+                  impurity = cv_out$dev,
+                  size = cv_out$size)
+  
+  # choose optimal alpha
+  best_alpha <- slice_min(cv_df, impurity) %>%
+    slice_min(size)
+  
+  # select final tree
+  t_opt <- prune.tree(t_0, k = best_alpha$alpha)
+  
+  # training errors
+  preds_train_topt <- predict(t_opt, winner_part$train, type = 'class')
+  
+  classes_train <- as.data.frame(winner_part$train) %>% pull(winner)
+  training_errors <- table(class = classes_train, pred = preds_train_topt)
+  
+  # Append to output vectors
+  Seed_Errors[i][[1]] <- diag(as.matrix(
+    training_errors/rowSums(training_errors)
+    ))
+  
+  Seed_Variables[i][[1]] <- summary(t_opt)$used
+}
+
+noquote('Classification success rates:')
+Seed_Errors %>% pander()
+
+Avg_Seed_Errors <- data.frame(matrix(unlist(Seed_Errors), 
+                  nrow=length(Seed_Errors), 
+                  byrow=TRUE)) %>% 
+  rename('Trump' = X1, 
+         'Clinton' = X2) %>% colMeans()
+
+noquote('Variables used in every tree:')
+Seed_Var <- Reduce(intersect, Seed_Variables)
+```
+
+
+# Introduction
+
+Presidential election predictions are popular practices and in the case of the 2012 election, the predictions proved to be accurate! However, the 2016 election was a huge shock to pollsters expecting a clear Hillary Clinton favorite, although Donald Trump eventually won. What went wrong in 2016 is that the polls had much higher polling error--they may have suffered from selection bias (somewhat fixable with raking) and suffered from a high degree of undecided voters (not fixable) that led poll results to be strongly and misleadingly in favor of Clinton.
+
+## Goal
+
+This was a huge lapse in the predictive value of polling, so we wanted to explore further how demographic variables at the county level played into the winner of each county race. We pursued this by conducting analysis on these variables through visualizations, model fitting, and other analysis techniques such as principle component analysis. 
+
+## Principal component inference
+
+For this project, we used PCA to find which covariates had the greatest influence on determining which candidate would win a certain county. We found PC1, a measure of employment and income, to be the most influential principal component. This suggested that the three largest variables in the first PC were IncomePerCap, ChildPoverty, and Poverty.
+
+## Classification approaches
+
+To confirm our findings from the PCA, we constructed both a linear regression model and a quadratic discriminant analysis model. We modeled the probability one candidate wins a county and identified significant associations with state variables using multiple models. The logistic regression model produced superior results, achieving 90.89% predictive accuracy. The model found that White, Citizen, Professional, Service, Production, Drive, Carpool, Employed, PrivateWork, Unemployment were all significantly associated with the county winner.
+
+We also fit a decision tree to the data to predict the winner of each county. We incrementally improved the prediction accuracy of the base model by implementing improvements such as using a threshold tied to the maximum Youden statistic as well as fitting a Random Forest model.
+
+\newpage
+
+# Materials and methods
+
+## Datasets
+
+The raw *census* data set was made up of county-level observations in the 2015 American Community Survey. These observations included demographic variables of each county in the United States. The raw *election* data set represented the 2016 US presidential election results on three observational units: county, state and national. 
+
+Generally, we pre-processed the data into county-level observations in order to merge the data sets by row on counties. Specifically, the election data was pre-processed by removing rows that did not correspond to any county in the United States. Then, we reformatted the election data to contain only county-level observations. The census data, which was initially on the census tract level, was aggregated to the county level.
+
+This merged data was then used to create state and county maps, along with other useful visuals to capture various relationships between the election candidates and the different covariates. Moreover, we utilized this cleaned data set to build our classification models and explore the different principal components.
+
+### Merged data frame used in analysis, first 5 rows and 7 columns
+
+```{r, include = T}
+winner_merged_data[0:5, 0:7] %>% pander()
+```
+
+\newpage
+
+## Methods
+
+### Inference
+
+We utilized ridge charts to visualize the difference between the demographics of the 2 county-level winning candidates, Hillary Clinton and Donald Trump. After carrying out PCA, we examined the proportion of variance explained by each component, as well as the cumulative proportion. We found a sharp drop-off in variance explained after the fourth principal component. In order to select the number of components, we plotted the variances to determine the fewest number of principal components that capture a considerable proportion of the variation and covariation. Ultimately, we decided to stick with the "elbow" value of about four principal components.
+
+### GLM
+
+A generalized linear model was used in order to model the probabilities that a major candidate won a county for the 2016 presidential election in order to predict the winning candidate in each county, as well as determine demographic variables that affect the outcome. Discriminant analysis was used to discern if we could do that using linear combinations. The data is split up 80% for training the model and 20% testing the model. The response variable was a factor indicating the winner (Donald Trump 0, Hillary Clinton 1) and the covariates was the census information for the corresponding county.
+
+Using the generalized linear model, the predictors that are statistically significant with the p-value 0.05 will be used for both the generalized linear model and quadratic discriminant analysis model. For both models, the optimal threshold will be calculated using Youden’s statistic. Then, the models will be converted to classes using the optimal threshold. These model’s classification errors will be compared to find the most accurate model.
+
+### Decision tree
+
+We then implemented a classification decision tree in order to predict the winner in each county using demographic information from the census data, including factors such as income per capita, employment by industry and the prevalence of poverty. To do this, we partitioned the data set, grew and trained the tree and then pruned it using cost-complexity pruning and the deviance loss function. We also ran an iteration in which we used the Gini loss formula. We then compared our predictions to the actual values for each county to examine the classification errors. Finally, we calculated Youden's statistic and implemented a threshold for prediction using this value in an attempt to improve prediction accuracy.
+
+The appeal of a classification decision tree was primarily its intuitive interpretation in this case. Given the level of quantitative detail of the data we were using and the prevalence of studies that indicate the importance of demographic variables such as gender and race on political party preference, it seemed reasonable to assume that using a tree to create decision rules based on these variables could lead to strong predictions. 
+
+Finally, as a natural extension of our decision tree analysis, we adopted a random forest method to examine the effect of reducing correlation among the trees and reducing variance. In creating a random forest, we use the ensemble method of bagging on the trees, which aggregates the predictions from models that have been trained on bootstrap samples. The trees are grown through the process of recursive binary splitting on random sunsets of the predictors. 
+ 
+\newpage 
+ 
+# Results
+
+## PCA 
+
+```{r, fig.width = 10, fig.height = 5, include = T}
+loading_plot+coord_flip()+facet_wrap(PC~., ncol = 4)
+```
+
+Our PCA results are detailed below:
+
+PC1 will be **large** when `Unemployment`, `Poverty`, and `ChildPoverty` are **large** and when `Employed`, and `IncomePerCap` are **small**. Given this correlation, we can interpret PC1 as measuring "affluence and employment".
+
+PC2 will be **large** when `White` and `SelfEmployment` are **large** and when `votes` and `Total` are **small**. Given this information, we were unable to find a clear interpretation of PC2.
+
+PC3 will be **large** when `WorkAtHome` and `Minority` are **large** and when `White`, `PrivateWork` and `Drive`are **small**. Given this correlation, we can interpret PC3 as measuring "ethnicity and employment".
+
+PC4 will be **large** when `Production` and `Carpool` are **large** and when `Citizen` is **small**. Given this information, we were unable to find a clear interpretation of PC4.
+
+PC1 was the most influential principal component, capturing almost 25% of the data set's variance. The three largest absolute values of the first principal component were IncomePerCap, ChildPoverty, and Poverty, indicating that these demographic attributes are greatly varied.
+
+\newpage
+
+## GLM and QDA 
+
+### GLM coefficients chosen by AIC
+
+```{r, include = T}
+GLM_Coefficients %>% pander()
+```
+
+Using the AIC stepwise model selection on the GLM model, the most significant predictors with the p value < 0.05 are White, Citizen, Professional, Service, Production, Drive, Carpool, Employed, PrivateWork, and Unemployment. With Donald Trump encoded as 0 and Hillary Clinton encoded as 1, variable impacts can be seen with the summary of the fitted GLM model. The variable with the largest absolute coefficient is Service.The variables with a larger positive coefficient were Professional, Employed, and Unemployment. Conversely, variables with a negative coefficient were White, Drive, and Carpool.
+
+### Errors from GLM and QDA
+
+```{r, include = T}
+GLM_Errors %>% pander('GLM Errors')
+QDA_Errors %>% pander('QDA Errors')
+```
+
+The error rate of the GLM model, with the classes converted using the optimal threshold, was 9.1%. The error rate of the QDA model, with the classes converted using the optimal threshold, was 13.82%. Because the GLM model had lower misclassification rates, it proved to be the more accurate model. 
+
+\newpage
+
+## Decision trees
+
+In the tree we trained using the deviance loss function and that we implemented cost-complexity pruning, nine variables were used in construction: the percent of the population that is white; the number of women; the number of citizens; the percent commuting on public transportation; the percent employed in production, transportation and material movement; the number of votes; the percent commuting alone in a car, van or truck; the percent of the population that is a minority; and the percent of the over-age-16 population employed. The total misclassification error rate was 6.3%. We also saw higher accuracy for counties that had voted for Donald Trump, with 93.41% of these counties being correctly classified versus 79.38% for Hillary Clinton.
+
+```{r, include = T, fig.width=8}
+draw.tree(t_opt, cex = 0.7, size = 2.5, digits = 2)
+```
+```{r}
+# Could not access classification success on test partition in this .RMD.
+# So, we will manually recreate our result from our exploratory .RMD
+data.frame('Trump' = c(0.93410853, 0.20618557),
+           'Clinton' = c(0.6589147, 0.7938),
+           row.names = c('Trump', 'Clinton')) %>% 
+  pander('Testing errors')
+```
+
+Then, in order to examine variation in our results based on the randomized seed, we underwent 30 iterations with different seeds. In every iteration, we saw that the classification of counties that voted for Donald Trump had higher accuracy than that of counties that voted for Hillary Clinton. Additionally, three variables were used in every tree: the percent commuting on public transportation, the percent of the population that is white and the number of votes.
+
+```{r, include = T}
+data.frame(Trump = Avg_Seed_Errors[1], 
+           Clinton = Avg_Seed_Errors[2]) %>% 
+  pander('Average error rate across 30 seeds', row.names = F)
+```
+
+
+Our next step was to calculate Youden’s statistic on the above-mentioned pruned tree in order to find a new threshold to draw predictions along. In doing this, we saw a decrease in the accuracy rate of counties which voted for Donald Trump but an increase in the accuracy rate of counties which voted for Hillary Clinton; the true positive rate for Trump went from 93.41% to 84.50% while the true positive rate for Clinton went from 79.38% to 87.63%.
+
+```{r, include = T}
+# Could not access classification success on test partition in this .RMD.
+# So, we will manually recreate our result from our exploratory .RMD
+
+data.frame('Trump' = c(0.9341, 0.8450),
+           'Clinton' = c(0.7938, 0.8763),
+           row.names = c('Automatic threshold', 'Optimal threshold')) %>% 
+  pander('Classification success rates, per class, per threshold')
+```
+
+In our random forest implementation, we saw a similar trend as in our trees with a lower classification error rate for counties which voted for Donald Trump (2.42%) versus for Hillary Clinton (24.18%). We also examined variable importance in terms of classification accuracy and the Gini index and found the mean decrease in misclassification rate across trees; the most important variables were the same ones that were used in every tree when we ran 30 iterations using different seeding: the percent commuting on public transportation, the percent of the population that is white and the number of votes.
+
+```{r, include = T}
+fit_bag$confusion %>% pander('Confusion matrix')
+```
+```{r, fig.width = 5, fig.height = 6,  include = T}
+variable_importance_plot
+```
+
+\newpage
+
+# Discussion
+
+## Inference through PCA and visualization
+
+After exploring the election data further through visualizations and PCA, we found that race and income played an important role in which candidates won a certain county. Overall we found that income, poverty and race seemed to be valuable factors to take into consideration when examining which covariates have the greatest influence on which candidate would win a certain county.
+
+## GLM and QDA takeaways
+
+Out of the 10 predictors used in both the GLM and QDA models, Professional, Service, Employed, and Unemployment had the largest absolute coefficient values, making them the most impactful variables on the county candidate winner. These variables all had positive coefficient values, meaning that counties with higher percentage employed in management, business, science, and arts, percentage employed in service jobs, percentage of employed people older than 16 years, and percentage unemployed, were counties where Hillary Clinton would be more likely to win against Donald Trump. 
+
+Conversely, variables with a negative coefficient were White, Drive, and Carpool. This meant that counties with higher percentage of White people, percentage of people driving alone in a car, van, or truck, percentage of people carpooling in a car, van, or truck, were counties where Hillary Clinton would be more likely to not win against Donald Trump.
+
+Some variables in each group of coefficients are contradictory, such as increased employment rate and unemployment rate both making Hillary Clinton’s win more likely, while increased independent driving rate and carpool rate both make Hillary Clinton’s lost more likely.
+
+## Decision tree results and considerations
+
+The variables white, transit, and total were used across all thirty randomized implementations of the decision tree. The significance of these demographic variables on choice of candidate echoes the ex post facto analysis that white people in non-urban areas were significantly more likely to vote for Trump.
+
+The white variable is self-explanatory: the degree of whiteness of a county was a predictor of voting for Trump. Total and transit can be explained as indicators of the population density of a county. Higher numbers of votes and higher numbers of people taking public transit tends to correspond with urban areas, which were more likely to vote for Clinton.
+
+```{r, include = T}
+winner_merged_data %>% group_by(winner) %>% count() %>% 
+  rename(counties = n) %>% pander()
+```
+
+Donald Trump's domination of the rural counties caused some problems for the decision tree. Because there were almost six times as many counties that voted for Trump, Clinton-voting counties were relatively rare, and rare events are by nature hard to classify.  As a result, the decision tree with automatic threshold struggled in correctly classifying Clinton counties, which we saw in the average error rates across seeds.
+
+Improvements to the decision tree could be made by implementing a grid search to find hyperparameters that yield the best classification accuracy.
+
+Overall, our strong classification results demonstrate that demographic data is fairly strong at predicting the winner in each county, which is promising for future election cycles.
+
