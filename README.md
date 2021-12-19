@@ -20,8 +20,18 @@ Additional inference coming from Principal Component Analysis and consideration 
 <img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Report-7.png?raw=true"/>
 <img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Report-8.png?raw=true"/>
 
-## EDA
-
-Data coming from 2015 American Community Survey.
-
 ## Workflow and work for classification trees
+
+<img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Trees-0.png?raw=true"/>
+<img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Trees-1.png?raw=true"/>
+<img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Trees-2.png?raw=true"/>
+<img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Trees-3.png?raw=true"/>
+<img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Trees-4.png?raw=true"/>
+<img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Trees-5.png?raw=true"/>
+<img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Trees-6.png?raw=true"/>
+<img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Trees-7.png?raw=true"/>
+<img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Trees-8.png?raw=true"/>
+
+## Data source
+
+County demographic data coming from 2015 American Community Survey.
