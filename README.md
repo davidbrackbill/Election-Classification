@@ -7,7 +7,7 @@ Predicting 2016 general election results by county using the following classific
 * Decision trees
 * Random forests
 
-Additional inference coming from use of Principal Component Analysis and consideration of classification error sources.
+Additional inference coming from Principal Component Analysis and consideration of classification error sources.
 
 ## Report
 
