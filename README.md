@@ -22,7 +22,7 @@ Additional inference coming from Principal Component Analysis and consideration 
 
 ## Workflow and work for classification trees
 
-<img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Trees-0.png?raw=true"/>
+<img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Trees-0.jpg?raw=true"/>
 <img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Trees-1.png?raw=true"/>
 <img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Trees-2.png?raw=true"/>
 <img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Trees-3.png?raw=true"/>
