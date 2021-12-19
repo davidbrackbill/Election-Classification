@@ -11,6 +11,9 @@ Additional inference coming from Principal Component Analysis and consideration 
 
 ## Report
 
+
+<img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Report-1.png?raw=true"/>
+
 ## EDA
 
 Data coming from 2015 American Community Survey.
