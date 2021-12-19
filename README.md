@@ -11,8 +11,14 @@ Additional inference coming from Principal Component Analysis and consideration 
 
 ## Report
 
-
 <img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Report-1.png?raw=true"/>
+<img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Report-2.png?raw=true"/>
+<img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Report-3.png?raw=true"/>
+<img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Report-4.png?raw=true"/>
+<img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Report-5.png?raw=true"/>
+<img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Report-6.png?raw=true"/>
+<img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Report-7.png?raw=true"/>
+<img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Report-8.png?raw=true"/>
 
 ## EDA
 
