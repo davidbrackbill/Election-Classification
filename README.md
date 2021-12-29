@@ -4,14 +4,14 @@
 Predicting 2016 general election results by county using the following classification techniques: 
 * Generalized linear model
 * Quadratic discriminant analysis
-* Decision trees
+* Decision trees (*my contribution*)
 * Random forests
 
 Additional inference coming from Principal Component Analysis and consideration of classification error sources.
 
 ## Report
 
-Alongside my classification tree work, I synthesized and formatted team-member work and edited the textual analysis.
+Alongside my individual work on the classification trees, I synthesized and formatted team-member work and edited the textual analysis.
 
 <img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Report-1.png?raw=true"/>
 <img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Report-2.png?raw=true"/>
