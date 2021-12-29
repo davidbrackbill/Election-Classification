@@ -11,7 +11,7 @@ Additional inference coming from Principal Component Analysis and consideration 
 
 ## Report
 
-Alongside my classification tree work, I compiled and formatted team-member work in an .RMD file and performed editing duties.
+Alongside my classification tree work, I synthesized and formatted team-member work and edited the textual analysis.
 
 <img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Report-1.png?raw=true"/>
 <img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Report-2.png?raw=true"/>
