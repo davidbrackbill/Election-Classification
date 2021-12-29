@@ -26,6 +26,8 @@ Alongside my individual work on the classification trees, I synthesized and form
 
 This was my individual contribution to the project.
 
+Embedded below are 1) my outlined workflow and 2) my actual analysis report
+
 <img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Trees-0.jpg?raw=true"/>
 <img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Trees-1.png?raw=true"/>
 <img src="https://github.com/davidbrackbill/Election-Classification/blob/main/data/rm_images/Trees-2.png?raw=true"/>
